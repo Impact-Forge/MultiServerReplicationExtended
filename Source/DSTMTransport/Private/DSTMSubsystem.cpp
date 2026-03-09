@@ -99,29 +99,23 @@ bool UDSTMSubsystem::InitializeFromCommandLine()
 	}
 
 	FString ListenIp = TEXT("0.0.0.0");
-	FParse::Value(FCommandLine::Get(), TEXT("-MultiServerListenIp="), ListenIp, false);
+	FParse::Value(FCommandLine::Get(), TEXT("-DSTMListenIp="), ListenIp, false);
 
-	int32 BaseListenPort = 15000;
-	FParse::Value(FCommandLine::Get(), TEXT("-MultiServerListenPort="), BaseListenPort);
-
-	// Apply DSTM port offset
-	const int32 DSTMListenPort = BaseListenPort + DSTMPortOffset;
+	int32 ListenPort = 16000;
+	FParse::Value(FCommandLine::Get(), TEXT("-DSTMListenPort="), ListenPort);
 
 	FString PeersArg;
-	TArray<FString> BasePeerAddresses;
-	if (FParse::Value(FCommandLine::Get(), TEXT("-MultiServerPeers="), PeersArg, false))
+	TArray<FString> PeerAddresses;
+	if (FParse::Value(FCommandLine::Get(), TEXT("-DSTMPeers="), PeersArg, false))
 	{
-		PeersArg.ParseIntoArray(BasePeerAddresses, TEXT(","), true);
+		PeersArg.ParseIntoArray(PeerAddresses, TEXT(","), true);
 	}
 
-	// Rewrite peer addresses with DSTM port offset
-	TArray<FString> DSTMPeerAddresses = OffsetPeerPorts(BasePeerAddresses, DSTMPortOffset);
-
 	UE_LOG(LogDSTMSub, Log,
-		TEXT("DSTM mesh auto-init: LocalId=%s, DSTMPort=%d (base %d + offset %d), Peers=%d"),
-		*LocalPeerId, DSTMListenPort, BaseListenPort, DSTMPortOffset, DSTMPeerAddresses.Num());
+		TEXT("DSTM mesh auto-init: LocalId=%s, ListenPort=%d, Peers=%d"),
+		*LocalPeerId, ListenPort, PeerAddresses.Num());
 
-	InitializeDSTMMesh(LocalPeerId, ListenIp, DSTMListenPort, DSTMPeerAddresses);
+	InitializeDSTMMesh(LocalPeerId, ListenIp, ListenPort, PeerAddresses);
 
 	// NOTE: GUID seed is NOT needed when UE_WITH_REMOTE_OBJECT_HANDLE=1.
 	// FRemoteObjectId embeds a 10-bit ServerId into every FNetworkGUID,
@@ -617,37 +611,6 @@ void UDSTMSubsystem::HandleIncomingMigrationRequest(
 #endif // UE_WITH_REMOTE_OBJECT_HANDLE
 
 // ─── Utility ─────────────────────────────────────────────────────
-
-TArray<FString> UDSTMSubsystem::OffsetPeerPorts(
-	const TArray<FString>& PeerAddresses, int32 Offset)
-{
-	TArray<FString> Result;
-	Result.Reserve(PeerAddresses.Num());
-
-	for (const FString& Addr : PeerAddresses)
-	{
-		// Parse "host:port" format
-		FString Host;
-		FString PortStr;
-		if (Addr.Split(TEXT(":"), &Host, &PortStr, ESearchCase::CaseSensitive, ESearchDir::FromEnd))
-		{
-			const int32 BasePort = FCString::Atoi(*PortStr);
-			const int32 OffsetPort = BasePort + Offset;
-			Result.Add(FString::Printf(TEXT("%s:%d"), *Host, OffsetPort));
-		}
-		else
-		{
-			// No port specified — cannot compute offset, peer will not be reachable
-			UE_LOG(LogDSTMSub, Warning,
-				TEXT("DSTM OffsetPeerPorts: Address '%s' has no port separator ':' — "
-					"this peer will NOT have a DSTM beacon connection. "
-					"Use 'host:port' format in -MultiServerPeers="),
-				*Addr);
-		}
-	}
-
-	return Result;
-}
 
 ADSTMBeaconClient* UDSTMSubsystem::FindBeaconForServer(uint32 ServerIdHash) const
 {

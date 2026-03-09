@@ -14,7 +14,7 @@ A plugin for Unreal Engine 5.7 that completes the engine's built-in DSTM (Distri
 - [Migrating an Actor](#migrating-an-actor)
 - [Migration Flow Reference](#migration-flow-reference)
 - [Pull Migration](#pull-migration)
-- [Beacon Mesh and Port Offset](#beacon-mesh-and-port-offset)
+- [Beacon Mesh](#beacon-mesh)
 - [GUID Seed (Not Needed with DSTM)](#guid-seed-not-needed-with-dstm)
 - [Runtime Scaling](#runtime-scaling)
 - [Logging](#logging)
@@ -78,7 +78,7 @@ TransferActorToServer(PC)
                                                          APlayerController::PostMigrate(Receive)
 ```
 
-The DSTM beacon mesh is a separate `UMultiServerNode` instance from any game-level multi-server mesh. It listens on a port offset (+1000 by default) from the main MultiServer mesh, keeping the transport concern isolated inside the plugin.
+The DSTM beacon mesh is a separate `UMultiServerNode` instance from any game-level multi-server mesh, keeping the transport concern isolated inside the plugin.
 
 ---
 
@@ -137,9 +137,9 @@ Each server process that participates in the DSTM mesh must receive these argume
 | Argument | Required | Description |
 |----------|----------|-------------|
 | `-DedicatedServerId=<string>` | Yes | Unique string identifier for this server (e.g. `server-1`). Hashed into a 10-bit `FRemoteServerId` in range [1, 1020] via `GetTypeHash() % 1020 + 1`. Also used as the beacon mesh `LocalPeerId` for peer identification. |
-| `-MultiServerListenPort=<int>` | Yes | Base port for the main MultiServer mesh. The DSTM mesh listens on this port + 1000. |
-| `-MultiServerListenIp=<ip>` | No | IP address to bind the DSTM beacon listener. Defaults to `0.0.0.0`. |
-| `-MultiServerPeers=<ip:port,...>` | Yes (multi-server) | Comma-separated list of `host:port` pairs for other servers' **main** MultiServer mesh ports. The plugin automatically adds +1000 to each port for the DSTM mesh. |
+| `-DSTMListenPort=<int>` | Yes | Port for the DSTM beacon listener. Each server needs a unique port (per host). Defaults to `16000`. |
+| `-DSTMListenIp=<ip>` | No | IP address to bind the DSTM beacon listener. Useful when servers should communicate over a private network interface separate from the game port. Defaults to `0.0.0.0`. |
+| `-DSTMPeers=<ip:port,...>` | Yes (multi-server) | Comma-separated list of `host:port` pairs pointing to other servers' DSTM beacon ports. |
 
 The expected server count for `AreAllPeersConnected()` is derived automatically as `PeerAddresses.Num() + 1` (peers + self). No separate count argument is needed.
 
@@ -150,18 +150,18 @@ The expected server count for `AreAllPeersConnected()` is derived automatically 
 ```
 # Server 1
 -DedicatedServerId=server-1
--MultiServerListenPort=15000
--MultiServerPeers=127.0.0.1:15001
+-DSTMListenPort=16000
+-DSTMPeers=127.0.0.1:16001
 
 # Server 2
 -DedicatedServerId=server-2
--MultiServerListenPort=15001
--MultiServerPeers=127.0.0.1:15000
+-DSTMListenPort=16001
+-DSTMPeers=127.0.0.1:16000
 ```
 
 With these arguments:
-- Server 1 DSTM beacon listens on port **16000** (15000 + 1000)
-- Server 2 DSTM beacon listens on port **16001** (15001 + 1000)
+- Server 1 DSTM beacon listens on port **16000**
+- Server 2 DSTM beacon listens on port **16001**
 - Each server connects its DSTM beacon to the other's DSTM port
 
 ---
@@ -205,12 +205,12 @@ TArray<FString> Peers = { TEXT("192.168.1.20:16001") };
 DSTM->InitializeDSTMMesh(
     TEXT("server-1"),   // LocalPeerId
     TEXT("0.0.0.0"),    // ListenIp
-    16000,              // ListenPort  (already offset)
-    Peers               // PeerAddresses (already offset)
+    16000,              // ListenPort
+    Peers               // PeerAddresses
 );
 ```
 
-When providing peer addresses explicitly, include the DSTM port offset yourself (i.e. the actual DSTM port, not the base MultiServer port).
+When providing peer addresses explicitly, supply the actual DSTM beacon ports.
 
 ### Checking readiness
 
@@ -319,21 +319,13 @@ The source server receives the request, fires `OnMigrationRequested`, and `Handl
 
 ---
 
-## Beacon Mesh and Port Offset
+## Beacon Mesh
 
-The plugin creates a dedicated `UMultiServerNode` separate from any game-level multi-server mesh. This keeps the DSTM transport concern fully inside the plugin.
+The plugin creates its own `UMultiServerNode` for the DSTM transport. This is separate from any game-level multi-server mesh, keeping the transport concern fully inside the plugin.
 
-The DSTM mesh port is computed as:
+The DSTM beacon listens on the port specified by `-DSTMListenPort=` (default `16000`). Peer addresses in `-DSTMPeers=` must point directly to each peer's DSTM beacon port.
 
-```
-DSTMListenPort = MultiServerListenPort + DSTMPortOffset
-```
-
-where `DSTMPortOffset = 1000` (a compile-time constant in `UDSTMSubsystem`).
-
-Peer addresses supplied via `-MultiServerPeers=` use the **base** MultiServer port. The plugin rewrites them automatically by adding `DSTMPortOffset` to each port before creating the mesh.
-
-If you initialize the mesh explicitly (not via command-line), supply the already-offset DSTM ports in `PeerAddresses`.
+When initializing explicitly (not via command-line), supply the DSTM ports directly in `PeerAddresses`.
 
 ### Server identity hashing
 
@@ -384,8 +376,8 @@ The MultiServer beacon host listens for incoming connections indefinitely after 
 ```
 # New server (server-3) starts with addresses of existing servers
 -DedicatedServerId=server-3
--MultiServerListenPort=15000
--MultiServerPeers=192.168.1.10:15000,192.168.1.11:15000
+-DSTMListenPort=16000
+-DSTMPeers=192.168.1.10:16000,192.168.1.11:16000
 ```
 
 **Flow:**
@@ -479,7 +471,7 @@ This is an engine-level limitation in UE 5.7's `UProxyNetDriver`. Dynamic proxy 
 The automation of scaling decisions is **out of scope** for this plugin. An external application should handle:
 - When to spin up / tear down server instances
 - Assigning unique `-DedicatedServerId=` values
-- Providing the correct `-MultiServerPeers=` addresses to new servers
+- Providing the correct `-DSTMPeers=` addresses to new servers
 - Deciding which server to migrate players *to* before shutting down a server
 
 ---
@@ -515,9 +507,9 @@ Each server process must receive `-DedicatedServerId=<unique-string>`. Without i
 ### `No beacon connection to destination server N! Migration data lost`
 
 The DSTM beacon mesh has not finished connecting to the target server. Ensure:
-- Both servers are running and have received `-MultiServerPeers=` pointing to each other's **base** ports
+- Both servers are running and have received `-DSTMPeers=` pointing to each other's DSTM ports
 - `AreAllPeersConnected()` returns `true` before initiating the first migration
-- Firewall rules allow traffic on both the base port and the base port + 1000
+- Firewall rules allow traffic on the DSTM beacon port
 
 ### Double-transfer: PlayerController and Pawn both passed separately
 
@@ -529,7 +521,7 @@ A serialization version mismatch between the two servers. Both server binaries m
 
 ### DSTM mesh created but `AreAllPeersConnected()` never returns `true`
 
-`AreAllPeersConnected()` is a startup readiness check: it waits until all peers listed in `-MultiServerPeers=` have connected and exchanged IDs. If the peer list is correct but the check never passes, verify network connectivity and that each peer's beacon listener port is reachable.
+`AreAllPeersConnected()` is a startup readiness check: it waits until all peers listed in `-DSTMPeers=` have connected and exchanged IDs. If the peer list is correct but the check never passes, verify network connectivity and that each peer's beacon listener port is reachable.
 
 **In dynamic meshes** where servers join and leave, `AreAllPeersConnected()` becomes unreliable after a server departure — `NumExpectedServers` never decreases, so the check stays `false` permanently. Use `GetConnectedPeerCount() > 0` or `GetConnectedPeerIds()` instead. See [Runtime Scaling](#runtime-scaling).
 

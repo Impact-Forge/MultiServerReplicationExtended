@@ -61,8 +61,8 @@ public:
 
 	/**
 	 * Initialize the DSTM beacon mesh from command-line arguments.
-	 * Reads -DedicatedServerId=, -MultiServerListenPort=, -MultiServerPeers=
-	 * and uses an offset port for the DSTM mesh.
+	 * Reads -DedicatedServerId=, -DSTMListenPort=, -DSTMPeers=
+	 * and creates the beacon mesh on the specified port.
 	 *
 	 * @return true if DSTM mesh was configured and created
 	 */
@@ -175,11 +175,6 @@ public:
 		FRemoteServerId DestServerId);
 #endif
 
-	// ──── Port Offset ────
-
-	/** Port offset from the main MultiServer mesh port. Default: 1000. */
-	static constexpr int32 DSTMPortOffset = 1000;
-
 private:
 	void HandlePeerConnected(
 		const FString& LocalPeerId,
@@ -201,12 +196,6 @@ private:
 		uint64 ObjectIdRaw,
 		uint32 RequestingServerIdRaw);
 #endif
-
-	/**
-	 * Rewrite peer addresses to use the DSTM port offset.
-	 * "192.168.1.10:15000" → "192.168.1.10:16000" (with offset 1000)
-	 */
-	static TArray<FString> OffsetPeerPorts(const TArray<FString>& PeerAddresses, int32 Offset);
 
 	/** Find the beacon client connected to a server by its FRemoteServerId ID number.
 	 *  The key matches HashServerIdToRange() output / FRemoteServerId::GetIdNumber(). */
