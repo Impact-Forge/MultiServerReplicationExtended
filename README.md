@@ -136,8 +136,7 @@ Each server process that participates in the DSTM mesh must receive these argume
 
 | Argument | Required | Description |
 |----------|----------|-------------|
-| `-DedicatedServerId=<string>` | Yes | Unique string identifier for this server (e.g. `server-1`). Hashed to a `uint32` via `GetTypeHash()` to produce the `FRemoteServerId`. Must be the same string used by your game code to identify this server. |
-| `-MultiServerLocalId=<string>` | Yes | Peer ID used in the MultiServer beacon mesh. Should match `-DedicatedServerId=` for correct peer routing. |
+| `-DedicatedServerId=<string>` | Yes | Unique string identifier for this server (e.g. `server-1`). Hashed to a `uint32` via `GetTypeHash()` to produce the `FRemoteServerId`. Also used as the beacon mesh `LocalPeerId` for peer identification. |
 | `-MultiServerListenPort=<int>` | Yes | Base port for the main MultiServer mesh. The DSTM mesh listens on this port + 1000. |
 | `-MultiServerListenIp=<ip>` | No | IP address to bind the DSTM beacon listener. Defaults to `0.0.0.0`. |
 | `-MultiServerPeers=<ip:port,...>` | Yes (multi-server) | Comma-separated list of `host:port` pairs for other servers' **main** MultiServer mesh ports. The plugin automatically adds +1000 to each port for the DSTM mesh. |
@@ -149,7 +148,6 @@ Each server process that participates in the DSTM mesh must receive these argume
 ```
 # Server 1
 -DedicatedServerId=server-1
--MultiServerLocalId=server-1
 -MultiServerListenPort=15000
 -MultiServerPeers=127.0.0.1:15001
 -MultiServerNumServers=2
@@ -157,7 +155,6 @@ Each server process that participates in the DSTM mesh must receive these argume
 
 # Server 2
 -DedicatedServerId=server-2
--MultiServerLocalId=server-2
 -MultiServerListenPort=15001
 -MultiServerPeers=127.0.0.1:15000
 -MultiServerNumServers=2
@@ -199,7 +196,7 @@ void AYourGameMode::StartPlay()
 }
 ```
 
-`InitializeFromCommandLine()` reads the command-line arguments described above, computes the DSTM port, and calls `InitializeDSTMMesh()` internally. It returns `true` if the mesh was created or `false` if the process is not in multi-server mode (no `-MultiServerLocalId=` present).
+`InitializeFromCommandLine()` reads the command-line arguments described above, computes the DSTM port, and calls `InitializeDSTMMesh()` internally. It returns `true` if the mesh was created or `false` if the process is not in multi-server mode (no `-DedicatedServerId=` present).
 
 ### Explicit initialization (without command-line args)
 
@@ -417,7 +414,6 @@ The MultiServer beacon host listens for incoming connections indefinitely after 
 ```
 # New server (server-3) starts with addresses of existing servers
 -DedicatedServerId=server-3
--MultiServerLocalId=server-3
 -MultiServerListenPort=15000
 -MultiServerPeers=192.168.1.10:15000,192.168.1.11:15000
 -MultiServerNumServers=3

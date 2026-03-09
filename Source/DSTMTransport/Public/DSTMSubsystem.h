@@ -61,7 +61,7 @@ public:
 
 	/**
 	 * Initialize the DSTM beacon mesh from command-line arguments.
-	 * Reads -MultiServerLocalId=, -MultiServerListenPort=, -MultiServerPeers=
+	 * Reads -DedicatedServerId=, -MultiServerListenPort=, -MultiServerPeers=
 	 * and uses an offset port for the DSTM mesh.
 	 *
 	 * @return true if DSTM mesh was configured and created

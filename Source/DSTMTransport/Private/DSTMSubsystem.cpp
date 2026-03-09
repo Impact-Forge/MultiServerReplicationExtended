@@ -88,9 +88,11 @@ bool UDSTMSubsystem::InitializeFromCommandLine()
 		TEXT("DSTM mesh not available: UE_WITH_REMOTE_OBJECT_HANDLE is disabled"));
 	return false;
 #else
-	// Check if multi-server mode is requested via command line
+	// Check if multi-server mode is requested via command line.
+	// Uses -DedicatedServerId= as both the DSTM server identity and the
+	// beacon mesh LocalPeerId — no separate -MultiServerLocalId= needed.
 	FString LocalPeerId;
-	if (!FParse::Value(FCommandLine::Get(), TEXT("-MultiServerLocalId="), LocalPeerId, false))
+	if (!FParse::Value(FCommandLine::Get(), TEXT("-DedicatedServerId="), LocalPeerId, false))
 	{
 		// Not in multi-server mode — no mesh needed
 		return false;
