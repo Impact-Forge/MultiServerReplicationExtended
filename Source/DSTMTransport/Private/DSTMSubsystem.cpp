@@ -256,7 +256,11 @@ void UDSTMSubsystem::ApplyGuidSeed(uint64 GuidSeed)
 		return;
 	}
 
-	NetDriver->GuidCache = MakeShared<FNetGUIDCache>(NetDriver, GuidSeed);
+	// Use GetNetGuidCache() accessor instead of direct member access.
+	// UNetDriver::GuidCache is slated for deprecation (UE_DEPRECATED 5.6,
+	// currently commented out). The non-const GetNetGuidCache() returns a
+	// TSharedPtr<FNetGUIDCache>& that we can assign through.
+	NetDriver->GetNetGuidCache() = MakeShared<FNetGUIDCache>(NetDriver, GuidSeed);
 
 	UE_LOG(LogDSTMSub, Log,
 		TEXT("DSTM: Applied GUID seed %llu to NetDriver GuidCache"), GuidSeed);
@@ -442,8 +446,20 @@ void UDSTMSubsystem::HandlePeerConnected(
 
 	PeerBeacons.Add(RemotePeerId, DSTMBeacon);
 
-	// Store reverse lookup: hash → peer ID string
+	// Store reverse lookup: hash → peer ID string.
+	// Detect hash collisions — two different DedicatedServerId strings that
+	// produce the same GetTypeHash() would silently misroute migration data.
 	const uint32 PeerHash = GetTypeHash(RemotePeerId);
+	if (const FString* Existing = ServerIdHashToPeerId.Find(PeerHash))
+	{
+		if (*Existing != RemotePeerId)
+		{
+			UE_LOG(LogDSTMSub, Error,
+				TEXT("DSTM HASH COLLISION: DedicatedServerId '%s' and '%s' both hash to %u! "
+					"Migration routing will be BROKEN. Rename one of the server IDs."),
+				**Existing, *RemotePeerId, PeerHash);
+		}
+	}
 	ServerIdHashToPeerId.Add(PeerHash, RemotePeerId);
 
 	UE_LOG(LogDSTMSub, Log,

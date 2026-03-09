@@ -351,6 +351,19 @@ FRemoteServerId id = FRemoteServerId::FromIdNumber(GetTypeHash(TEXT("server-1"))
 
 `GetRemoteServerIdFromString()` performs this hash publicly so your game code can produce the same value when specifying migration targets.
 
+### Hash collision detection
+
+Because `GetTypeHash()` maps an arbitrary `FString` to a `uint32`, two different server IDs could theoretically produce the same hash. A collision would silently misroute migration data to the wrong server.
+
+The plugin detects this at runtime: when a new peer connects, `HandlePeerConnected()` checks whether the computed hash already maps to a **different** peer ID. If a collision is detected, an `Error`-level log is emitted:
+
+```
+DSTM HASH COLLISION: DedicatedServerId 'zone-alpha' and 'zone-beta' both hash to 1234567890!
+Migration routing will be BROKEN. Rename one of the server IDs.
+```
+
+In practice, collisions are extremely unlikely for typical server names (`server-1`, `server-2`, `zone-west`, etc.). If you encounter one, simply rename one of the colliding servers.
+
 ---
 
 ## GUID Seed
@@ -363,7 +376,7 @@ This is a **separate concern from DSTM**. DSTM uses `FRemoteObjectId` for cross-
 
 ### How it works
 
-The plugin replaces the `NetDriver`'s `GuidCache` with a new `FNetGUIDCache` initialized with the specified seed. The seed offsets the GUID counter so that servers allocate from disjoint ranges:
+The plugin replaces the `NetDriver`'s `GuidCache` with a new `FNetGUIDCache` initialized with the specified seed via the `GetNetGuidCache()` accessor (avoiding direct member access to the deprecated `GuidCache` field). The seed offsets the GUID counter so that servers allocate from disjoint ranges:
 
 | Server | Seed | GUID range |
 |--------|------|-----------|
@@ -389,7 +402,7 @@ DSTM->ApplyGuidSeed(100000);  // Call before any clients connect
 
 ### Shipping builds
 
-The engine's built-in `-NetworkGuidSeed=` parameter is gated by `#if !UE_BUILD_SHIPPING` and doesn't work in Shipping builds. The plugin's `ApplyGuidSeed()` replaces the `GuidCache` directly via the public `ENGINE_API` constructor, so it works in **all build configurations** including Shipping.
+The engine's built-in `-NetworkGuidSeed=` parameter is gated by `#if !UE_BUILD_SHIPPING` and doesn't work in Shipping builds. The plugin's `ApplyGuidSeed()` uses the `GetNetGuidCache()` accessor (which returns a mutable `TSharedPtr<FNetGUIDCache>&`) and the public `ENGINE_API` constructor, so it works in **all build configurations** including Shipping and is forward-compatible with Epic's planned deprecation of the `GuidCache` member variable.
 
 ---
 
@@ -478,7 +491,7 @@ LogDSTMSub=Verbose
 
 ### `UE_WITH_REMOTE_OBJECT_HANDLE is disabled` warning at startup
 
-Your engine build does not have DSTM support compiled in. The plugin requires a custom UE 5.7 build with `UE_WITH_REMOTE_OBJECT_HANDLE=1` defined in `RemoteObjectHandle.h` or the build environment.
+Your engine build does not have DSTM support compiled in. The plugin requires a custom UE 5.7 build with `UE_WITH_REMOTE_OBJECT_HANDLE=1` defined in `Engine\Source\Runtime\Core\Public\Misc\CoreMiscDefines.h` or the build environment.
 
 ### `No -DedicatedServerId= on command line` — migration never starts
 
