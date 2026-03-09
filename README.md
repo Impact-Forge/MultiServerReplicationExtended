@@ -183,9 +183,42 @@ public class YourGameServerTarget : TargetRules
 
 If your project also uses a custom client target that must interoperate with the DSTM server, add the same line to the client `.Target.cs` as well.
 
-**No engine source modifications are needed**, but you must use an engine built from source (e.g. from the [EpicGames/UnrealEngine](https://github.com/EpicGames/UnrealEngine) repository). A precompiled engine installed via the Epic Games Launcher does not support recompiling engine modules with custom defines. The define propagates through UBT to every module compiled for that target, which requires the engine source to be present.
+You must use an engine built from source (e.g. from the [EpicGames/UnrealEngine](https://github.com/EpicGames/UnrealEngine) repository). A precompiled engine installed via the Epic Games Launcher does not support recompiling engine modules with custom defines. The define propagates through UBT to every module compiled for that target, which requires the engine source to be present.
 
-If the define is `0` (or absent), the plugin compiles but the DSTM transport remains inert: the module logs a warning, skips delegate binding, and the subsystem reports `IsMeshActive() == false`. The proxy fixes still work regardless.
+### Required engine source patches
+
+`GlobalDefinitions` applies `UE_WITH_REMOTE_OBJECT_HANDLE=1` to **every module** compiled for the target, including engine modules. Several engine source files contain hardcoded size assumptions about `FWeakObjectPtr` that break when the define changes its layout from 8 to 16 bytes. These must be patched in the engine source before building:
+
+**`Engine/Source/Runtime/MovieScene/Public/TrackInstancePropertyBindings.h`** — `FVolatilePropertyStep` size assertion:
+
+```cpp
+// Replace the static_assert around line 92:
+#if UE_WITH_REMOTE_OBJECT_HANDLE
+static_assert(sizeof(FVolatilePropertyStep) <= 24, "Try to fit FVolatilePropertyStep inside 24 bytes");
+#else
+static_assert(sizeof(FVolatilePropertyStep) <= 16, "Try to fit FVolatilePropertyStep inside 16 bytes");
+#endif
+```
+
+**`Engine/Source/Runtime/Engine/Private/Collision/SceneQuery.cpp`** — unreachable code in `GetIgnoreQueryHandler()`:
+
+```cpp
+// Replace the function around line 41:
+bool GetIgnoreQueryHandler()
+{
+#if UE_WITH_REMOTE_OBJECT_HANDLE
+	return bIgnoreQueryHandler;
+#else
+	return false;
+#endif
+}
+```
+
+The original code has `return false;` after the `#if` block's `return` without an `#else`, which MSVC treats as unreachable code (error C4702 with warnings-as-errors).
+
+> **Note:** Additional patches may be needed if your project enables optional engine plugins (e.g. `PlainPropsUObject`) that also contain `FWeakObjectPtr` size assertions. If you encounter similar `static_assert` failures during the build, apply the same conditional pattern.
+
+If the define is `0` (or absent), the plugin compiles but the DSTM transport remains inert: the module logs a warning, skips delegate binding, and the subsystem reports `IsMeshActive() == false`. The proxy fixes still work regardless. No engine patches are needed in that case.
 
 > **ABI note:** Setting `UE_WITH_REMOTE_OBJECT_HANDLE=1` changes `FWeakObjectPtr` layout (adds `FRemoteObjectId`, growing it from 8 to 16 bytes). All modules linked into the server binary must be compiled with the same setting. This happens automatically when using `GlobalDefinitions` in the target — UBT recompiles everything for that target configuration.
 

@@ -119,7 +119,6 @@ public:
 	 *
 	 * @param GuidSeed - Non-zero seed value applied to FNetGUIDCache::NetworkGuidIndex
 	 */
-	UFUNCTION(BlueprintCallable, Category = "DSTM")
 	void ApplyGuidSeed(uint64 GuidSeed);
 
 	// ──── Migration API ────
