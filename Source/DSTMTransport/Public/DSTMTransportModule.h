@@ -24,7 +24,7 @@
  *   → Our delegate bindings win over the default disk-based fallbacks
  *     (RemoteObject.cpp checks !IsBound() before applying defaults).
  *
- * See SEAMLESS.md, Approach 2, Steps 2 & 4.
+ * See README.md § Architecture and § Initialization.
  */
 class FDSTMTransportModule : public IModuleInterface
 {

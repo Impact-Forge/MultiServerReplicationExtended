@@ -23,7 +23,7 @@ class ADSTMBeaconClient;
  * The module binds static delegate callbacks at startup; those callbacks
  * forward to this subsystem for actual routing through the beacon mesh.
  *
- * Architecture (SEAMLESS.md, Approach 2):
+ * Architecture (see README.md):
  *   ┌──────────────┐       ┌──────────────────────┐       ┌──────────────┐
  *   │   Server-A   │       │   DSTM Beacon Mesh   │       │   Server-B   │
  *   │              │       │                      │       │              │

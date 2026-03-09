@@ -13,7 +13,7 @@
  * FRemoteObjectData between game servers. This is the network transport
  * layer that replaces DSTM's default disk I/O with beacon-based delivery.
  *
- * Architecture (SEAMLESS.md, Approach 2, Step 3):
+ * Architecture (see README.md § Migration Flow Reference):
  *   When Server-A calls TransferObjectOwnershipToRemoteServer(), the engine
  *   serializes the actor and invokes RemoteObjectTransferDelegate. Our
  *   DSTMSubsystem catches this, serializes FRemoteObjectData to bytes,
