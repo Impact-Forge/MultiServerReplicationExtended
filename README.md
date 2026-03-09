@@ -38,7 +38,8 @@ The plugin consists of three cooperating classes:
 
 ## Prerequisites
 
-- Unreal Engine 5.7 (custom build with `UE_WITH_REMOTE_OBJECT_HANDLE=1`)
+- [Unreal Engine 5.7 Source Code ](https://www.unrealengine.com/en-US/ue-on-github)
+- `UE_WITH_REMOTE_OBJECT_HANDLE=1` defined in your server target (see [Engine Build Requirement](#engine-build-requirement))
 - `MultiServerReplication` plugin (ships with UE 5.7)
 - A dedicated-server topology where each server process has a unique string ID
 
@@ -113,20 +114,37 @@ The DSTM beacon mesh is a separate `UMultiServerNode` instance from any game-lev
 
 ## Engine Build Requirement
 
-This plugin requires **one engine source modification**: setting `UE_WITH_REMOTE_OBJECT_HANDLE` to `1` in `Engine/Source/Runtime/Core/Public/Misc/CoreMiscDefines.h`. The stock UE 5.7 default is `0`.
+This plugin requires `UE_WITH_REMOTE_OBJECT_HANDLE=1` to be defined at compile time. The stock UE 5.7 default is `0`.
 
-```cpp
-// CoreMiscDefines.h — change required
-#ifndef UE_WITH_REMOTE_OBJECT_HANDLE
-    #define UE_WITH_REMOTE_OBJECT_HANDLE 1   // stock default is 0
-#endif
+> **Important:** `UE_WITH_REMOTE_OBJECT_HANDLE` is **not supported in editor targets**. Setting it globally in engine headers (e.g. `CoreMiscDefines.h`) will cause compilation failures across the editor codebase (`UE_WITH_OBJECT_HANDLE_LATE_RESOLVE`, `UE_WITH_PACKAGE_ACCESS_TRACKING`, and related subsystems become disabled, breaking cooker, property serialization, and object-ref code). Only enable it when packaging a dedicated client/server pair.
+
+### Recommended approach: Server target `GlobalDefinitions`
+
+Add the define in your **server target** (`.Target.cs`) so it is only active for server builds:
+
+```cs
+// YourGameServer.Target.cs
+public class YourGameServerTarget : TargetRules
+{
+    public YourGameServerTarget(TargetInfo Target) : base(Target)
+    {
+        Type = TargetType.Server;
+        // ...
+
+        // Enable DSTM remote object handles for cross-server actor migration.
+        // Not supported in editor targets — only set for packaged server builds.
+        GlobalDefinitions.Add("UE_WITH_REMOTE_OBJECT_HANDLE=1");
+    }
+}
 ```
 
-This is the **only** engine change needed. No other engine source files are modified.
+If your project also uses a custom client target that must interoperate with the DSTM server, add the same line to the client `.Target.cs` as well.
 
-If the define is `0`, the plugin compiles but remains inert: the module logs a warning, skips delegate binding, and the subsystem reports `IsMeshActive() == false`.
+**No engine source modifications are needed**, but you must use an engine built from source (e.g. from the [EpicGames/UnrealEngine](https://github.com/EpicGames/UnrealEngine) repository). A precompiled engine installed via the Epic Games Launcher does not support recompiling engine modules with custom defines. The define propagates through UBT to every module compiled for that target, which requires the engine source to be present.
 
-> **Important:** Setting `UE_WITH_REMOTE_OBJECT_HANDLE=1` changes `FObjectHandle` from a simple pointer to `FRemoteObjectHandlePrivate` (tagged pointer union). Every `TObjectPtr<>` in the engine changes ABI. All modules (engine, plugins, game) must be compiled against the same setting. A pre-built/installed engine cannot be mixed with a source-built one. You must build the engine from source with this change.
+If the define is `0` (or absent), the plugin compiles but remains inert: the module logs a warning, skips delegate binding, and the subsystem reports `IsMeshActive() == false`.
+
+> **ABI note:** Setting `UE_WITH_REMOTE_OBJECT_HANDLE=1` changes `FWeakObjectPtr` layout (adds `FRemoteObjectId`, growing it from 8 to 16 bytes). All modules linked into the server binary must be compiled with the same setting. This happens automatically when using `GlobalDefinitions` in the target — UBT recompiles everything for that target configuration.
 
 ---
 
@@ -522,7 +540,7 @@ LogDSTMSub=Verbose
 
 ### `UE_WITH_REMOTE_OBJECT_HANDLE is disabled` warning at startup
 
-Your engine build does not have DSTM support compiled in. The plugin requires a custom UE 5.7 build with `UE_WITH_REMOTE_OBJECT_HANDLE=1` defined in `Engine\Source\Runtime\Core\Public\Misc\CoreMiscDefines.h` or the build environment.
+Your server build does not have DSTM support compiled in. Add `GlobalDefinitions.Add("UE_WITH_REMOTE_OBJECT_HANDLE=1");` to your server `.Target.cs` file and rebuild. See [Engine Build Requirement](#engine-build-requirement). Do **not** set this define in engine headers — it is not supported in editor targets.
 
 ### `No -DedicatedServerId= on command line` — migration never starts
 
