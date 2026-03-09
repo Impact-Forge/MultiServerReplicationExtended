@@ -698,7 +698,7 @@ void UProxyNetDriver::RegisterGameServerAndConnectClients(const FURL& GameServer
 		{
 			ProxyListenerNotify->ConnectToGameServer(
 				ProxyConnection,
-				PrimaryGameServerForNextClient,
+				NewServerIndex,
 				NewState,
 				UE::Net::EJoinFlags::NoPawn);
 			ConnectedCount++;

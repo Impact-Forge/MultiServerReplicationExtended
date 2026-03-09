@@ -38,8 +38,8 @@ class ADSTMBeaconClient;
  *   └──────────────┘       └──────────────────────┘       └──────────────┘
  *
  * The mesh is separate from any game-specific MultiServer mesh to maintain
- * plugin isolation. It reads the same command-line peer config with an
- * offset port (+1000).
+ * plugin isolation. It uses its own command-line args (-DSTMListenPort,
+ * -DSTMPeers) independent of the engine's -MultiServerListenPort/-MultiServerPeers.
  *
  * Lifecycle:
  *   1. DSTMTransportModule::StartupModule() binds transport delegates

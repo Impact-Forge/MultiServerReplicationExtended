@@ -231,11 +231,15 @@ The DSTM beacon mesh is a separate `UMultiServerNode` instance from any game-lev
 
 ## Command-Line Arguments
 
+This plugin inherits the stock `MultiServerReplication` command-line arguments and adds DSTM transport arguments. All arguments are listed below grouped by component.
+
+### DSTM transport arguments
+
 Each server process that participates in the DSTM mesh must receive these arguments:
 
 | Argument | Required | Description |
 |----------|----------|-------------|
-| `-DedicatedServerId=<string>` | Yes | Unique string identifier for this server (e.g. `server-1`). Hashed into a 10-bit `FRemoteServerId` in range [1, 1020] via `GetTypeHash() % 1020 + 1`. Also used as the beacon mesh `LocalPeerId` for peer identification. |
+| `-DedicatedServerId=<string>` | Yes | Unique string identifier for this server (e.g. `server-1`). Hashed into a 10-bit `FRemoteServerId` in range [1, 1020] via `GetTypeHash() % 1020 + 1`. Also used as the DSTM beacon mesh `LocalPeerId` for peer identification. |
 | `-DSTMListenPort=<int>` | Yes | Port for the DSTM beacon listener. Each server needs a unique port (per host). Defaults to `16000`. |
 | `-DSTMListenIp=<ip>` | No | IP address to bind the DSTM beacon listener. Useful when servers should communicate over a private network interface separate from the game port. Defaults to `0.0.0.0`. |
 | `-DSTMPeers=<ip:port,...>` | Yes (multi-server) | Comma-separated list of `host:port` pairs pointing to other servers' DSTM beacon ports. |
@@ -243,6 +247,28 @@ Each server process that participates in the DSTM mesh must receive these argume
 The expected server count for `AreAllPeersConnected()` is derived automatically as `PeerAddresses.Num() + 1` (peers + self). No separate count argument is needed.
 
 > **Note: No GUID seed is needed.** With `UE_WITH_REMOTE_OBJECT_HANDLE=1`, every `FNetworkGUID` is derived from `FRemoteObjectId`, which embeds the 10-bit `ServerId` — collisions between servers are structurally impossible. The seed-based `FNetGUIDCache` counter (`NetworkGuidIndex`) is compile-time excluded by the DSTM code path.
+
+### Engine multi-server mesh arguments (stock)
+
+These arguments are parsed by `UMultiServerNode::ParseCommandLineIntoCreateParams()` from the stock `MultiServerReplication` plugin. They configure the engine-level beacon mesh used for server-to-server replication metadata. The DSTM mesh is **separate** from this mesh and uses its own args above.
+
+| Argument | Required | Description |
+|----------|----------|-------------|
+| `-MultiServerLocalId=<string>` | Yes | Unique peer ID for this server in the engine mesh. Typically set to the same value as `-DedicatedServerId=`. |
+| `-MultiServerListenPort=<int>` | Yes | Port for the engine beacon mesh listener. Each server needs a unique port. |
+| `-MultiServerPeers=<ip:port,...>` | Yes (multi-server) | Comma-separated list of `host:port` pairs pointing to other servers' engine mesh beacon ports. |
+| `-MultiServerNumServers=<int>` | No | Expected number of servers for `AreAllServersConnected()`. Defaults to the peer count if omitted. Rarely needed — the peer list length is usually sufficient. |
+
+### Proxy arguments (stock)
+
+These arguments are parsed by `UProxyNetDriver::InitBase()` and configure the proxy server that multiplexes player connections to backend game servers:
+
+| Argument | Required | Description |
+|----------|----------|-------------|
+| `-ProxyGameServers=<addresses>` | Yes (proxy only) | Comma-separated list of backend game server addresses. Supports port ranges (`127.0.0.1:7777-7778` expands to two entries). |
+| `-NetDriverOverrides=<class>` | Yes (proxy only) | Must be set to `/Script/MultiServerReplicationEx.ProxyNetDriver` to activate the proxy. |
+| `ProxyClientPrimaryGameServer=<int\|random>` | No | Which game server index is the primary for each new client. Pass `random` for randomization. Defaults to `0`. |
+| `-ProxyCyclePrimaryGameServer` | No | Flag: after each client connects, advance `PrimaryGameServerForNextClient` to the next server (round-robin). |
 
 ### Example (two-server cluster with proxy)
 

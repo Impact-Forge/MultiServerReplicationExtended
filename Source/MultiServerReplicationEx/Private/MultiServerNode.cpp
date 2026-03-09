@@ -334,9 +334,12 @@ void UMultiServerNode::ForEachNetDriver(TFunctionRef<void(UNetDriver*)> Operatio
 {
 	TSet<UNetDriver*> UniqueNetDrivers;
 
-	if (UNetDriver* HostNetDriver = BeaconHost->GetNetDriver())
+	if (BeaconHost)
 	{
-		UniqueNetDrivers.Add(HostNetDriver);
+		if (UNetDriver* HostNetDriver = BeaconHost->GetNetDriver())
+		{
+			UniqueNetDrivers.Add(HostNetDriver);
+		}
 	}
 
 	for (int32 PeerIndex = 0; PeerIndex < PeerConnections.Num(); PeerIndex++)
