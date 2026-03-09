@@ -469,6 +469,7 @@ void UDSTMSubsystem::HandlePeerConnected(
 
 	PeerBeacons.Add(RemotePeerId, DSTMBeacon);
 
+#if UE_WITH_REMOTE_OBJECT_HANDLE
 	// Store reverse lookup: hashed server ID → peer ID string.
 	// Uses HashServerIdToRange() to produce the same value as FRemoteServerId,
 	// so FindBeaconForServer(RemoteServerId.GetIdNumber()) will match.
@@ -489,6 +490,11 @@ void UDSTMSubsystem::HandlePeerConnected(
 
 	UE_LOG(LogDSTMSub, Log,
 		TEXT("DSTM peer registered: '%s' → ServerId %u"), *RemotePeerId, PeerHash);
+#else
+	UE_LOG(LogDSTMSub, Log,
+		TEXT("DSTM peer registered: '%s' (DSTM migration disabled — no UE_WITH_REMOTE_OBJECT_HANDLE)"),
+		*RemotePeerId);
+#endif
 
 #if UE_WITH_REMOTE_OBJECT_HANDLE
 	// Wire up delegates for incoming migration data from this peer
