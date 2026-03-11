@@ -29,13 +29,25 @@ public:
 		const FOnAuthenticationVerificationCompleteDelegate& OnComplete) override;
 };
 
+/** Tracks a game server registered with the proxy, including its DSTM beacon address. */
+struct FRegisteredDSTMPeer
+{
+	AOnlineBeaconClient* BeaconClient = nullptr;
+	FString DSTMAddress; // host:port — derived from GameServerAddress host + DSTMListenPort
+};
+
 /**
  * Beacon host object that runs on the proxy server.
  *
  * When a game server's AProxyRegistrationBeaconClient connects and sends its
- * address, this object looks up the world's UProxyNetDriver and calls
- * RegisterGameServerAndConnectClients() — the same code path used by the
- * static -ProxyGameServers= command-line registration.
+ * address + DSTM info, this object:
+ *   1. Collects existing peers' DSTM addresses
+ *   2. Registers the game server with the proxy's UProxyNetDriver
+ *   3. Stores the new server's DSTM address
+ *   4. Sends the peer list to the new server via ClientReceiveDSTMPeers()
+ *
+ * This lets the proxy orchestrate the DSTM mesh topology so game servers
+ * don't need -DSTMPeers= on their command line.
  */
 UCLASS(transient, notplaceable)
 class AProxyRegistrationBeaconHostObject : public AOnlineBeaconHostObject
@@ -50,6 +62,10 @@ public:
 	virtual void NotifyClientDisconnected(AOnlineBeaconClient* LeavingClientActor) override;
 	//~ End AOnlineBeaconHostObject interface
 
-	/** Called by AProxyRegistrationBeaconClient::ServerRegisterGameServer_Implementation. */
-	void HandleGameServerRegistration(const FString& GameServerAddress);
+private:
+	/** Register a game server with the proxy and send it the current DSTM peer list. */
+	void HandleGameServerRegistration(const FString& GameServerAddress, const FString& DSTMAddress, AOnlineBeaconClient* BeaconClient);
+
+	/** DSTM peers tracked for handing the full peer list to new joiners. */
+	TArray<FRegisteredDSTMPeer> RegisteredDSTMPeers;
 };
